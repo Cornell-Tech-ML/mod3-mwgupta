@@ -269,14 +269,13 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
         cache[pos] = 0.0  # padding
     cuda.syncthreads()
 
-    # parallel reduce
-    stride = 1
-    while stride < BLOCK_DIM:
-        half_stride = stride * 2
-        if pos % half_stride == 0 and (pos + stride) < BLOCK_DIM:
-            cache[pos] += cache[pos + stride]
-        stride = half_stride
+    # reduce
+    j = 2
+    while j <= BLOCK_DIM:
+        if pos % j == 0:
+            cache[pos] += cache[pos + 1]
         cuda.syncthreads()
+        j *= 2
 
     # write output to global memory
     if pos == 0:
@@ -405,56 +404,46 @@ def _mm_practice(out: Storage, a: Storage, b: Storage, size: int) -> None:
     """
     BLOCK_DIM = 32
     # TODO: Implement for Task 3.3.
-
-    # Allocate shared memory
     a_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
     b_shared = cuda.shared.array((BLOCK_DIM, BLOCK_DIM), numba.float64)
 
-    # Thread indices
     tx = cuda.threadIdx.x
     ty = cuda.threadIdx.y
 
-    # Block indices
-    bx = cuda.blockIdx.x
-    by = cuda.blockIdx.y
-
-    # Compute global row and column indices
-    row = by * BLOCK_DIM + ty
-    col = bx * BLOCK_DIM + tx
+    row = cuda.blockIdx.y * BLOCK_DIM + ty
+    col = cuda.blockIdx.x * BLOCK_DIM + tx
 
     # Ensure indices are within bounds
-    if row >= size or col >= size:
-        return
-
-    # Initialize accumulator for the result
-    acc = 0.0
-
-    # Loop over tiles
-    for tile in range(0, size, BLOCK_DIM):
-        # Load elements of `a` and `b` into shared memory
-        if row < size and (tile + tx) < size:
-            a_shared[ty, tx] = a[row * size + (tile + tx)]
-        else:
-            a_shared[ty, tx] = 0.0
-
-        if col < size and (tile + ty) < size:
-            b_shared[ty, tx] = b[(tile + ty) * size + col]
-        else:
-            b_shared[ty, tx] = 0.0
-
-        # Synchronize threads within the block
-        cuda.syncthreads()
-
-        # Perform the multiplication and accumulate the results
-        for k in range(BLOCK_DIM):
-            acc += a_shared[ty, k] * b_shared[k, tx]
-
-        # Synchronize again before loading new tiles
-        cuda.syncthreads()
-
-    # Write the final result to global memory
     if row < size and col < size:
-        out[row * size + col] = acc
+        # Initialize accumulator for the result
+        acc = 0.0
+
+        # Loop over tiles
+        for tile in range(0, size, BLOCK_DIM):
+            # Load elements of `a` and `b` into shared memory
+            if row < size and (tile + tx) < size:
+                a_shared[ty, tx] = a[row * size + (tile + tx)]
+            else:
+                a_shared[ty, tx] = 0.0
+
+            if col < size and (tile + ty) < size:
+                b_shared[ty, tx] = b[(tile + ty) * size + col]
+            else:
+                b_shared[ty, tx] = 0.0
+
+            # Synchronize threads within the block
+            cuda.syncthreads()
+
+            # Perform the multiplication and accumulate the results
+            for k in range(BLOCK_DIM):
+                acc += a_shared[ty, k] * b_shared[k, tx]
+
+            # Synchronize again before loading new tiles
+            cuda.syncthreads()
+
+        # Write the final result to global memory
+        if row < size and col < size:
+            out[row * size + col] = acc
 
 
 jit_mm_practice = jit(_mm_practice)
