@@ -271,7 +271,7 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
 
     # reduce
     j = 1
-    while j < BLOCK_DIM:
+    while j <= BLOCK_DIM:
         stride = j * 2
         if pos % stride == 0 and (pos + j) < BLOCK_DIM:
             cache[pos] += cache[pos + j]
@@ -358,7 +358,7 @@ def tensor_reduce(
 
             # reduce
             j = 1
-            while j < BLOCK_DIM:
+            while j <= BLOCK_DIM:
                 stride = j * 2
                 if pos % stride == 0 and (pos + j) < BLOCK_DIM:
                     cache[pos] = fn(cache[pos], cache[pos + j])
