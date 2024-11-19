@@ -272,7 +272,7 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
     # reduce
     stride = BLOCK_DIM // 2
     while stride > 0:
-        if pos < stride and pos + stride < BLOCK_DIM:
+        if pos < stride and i + stride < size:
             cache[pos] = cache[pos] + cache[pos + stride]
         stride //= 2
         cuda.syncthreads() 
@@ -506,7 +506,7 @@ def _tensor_matrix_multiply(
     acc = 0.0
 
     for tile in range(0, a_shape[-1], BLOCK_DIM):
-        # Load shared memory from a_storage and b_storage
+        # load to shared
         if i < a_shape[-2] and (tile + pj) < a_shape[-1]:
             a_index = batch * a_batch_stride + i * a_strides[1] + (tile + pj) * a_strides[2]
             a_shared[pi, pj] = a_storage[a_index]
@@ -522,9 +522,10 @@ def _tensor_matrix_multiply(
         cuda.syncthreads()
 
         # dot product
-        for k in range(BLOCK_DIM):
-            acc += a_shared[pi, k] * b_shared[k, pj]
-        cuda.syncthreads()
+        if i < out_shape[-2] and j < out_shape[-1]:
+            for k in range(BLOCK_DIM):
+                acc += a_shared[pi, k] * b_shared[k, pj]
+            cuda.syncthreads()
 
     # write to global
     if i < out_shape[-2] and j < out_shape[-1]:
