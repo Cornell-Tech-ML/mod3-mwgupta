@@ -332,23 +332,6 @@ def tensor_reduce(
 
         # TODO: Implement for Task 3.3.
         if out_pos < out_size:
-            to_index(out_pos, out_shape, out_index)
-            acc = reduce_value
-
-            # reduce
-            reduce_size = a_shape[reduce_dim]
-            for s in range(reduce_size):
-                out_index[reduce_dim] = s
-                j = index_to_position(out_index, a_strides)
-                acc = fn(acc, a_storage[j])
-
-            # write output to shared memory
-            cache[pos] = acc
-        else:
-            cache[pos] = reduce_value
-        cuda.syncthreads()
-
-        if out_pos < out_size:
             # Convert linear index to multidimensional index for output tensor
             to_index(out_pos, out_shape, out_index)
             accumulated_value = reduce_value  # Initialize accumulator
