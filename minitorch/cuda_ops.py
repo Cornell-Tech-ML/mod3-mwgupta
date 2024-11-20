@@ -337,20 +337,12 @@ def tensor_reduce(
             to_index(i, out_shape, out_index)
             acc = reduce_value
 
-            # padding
-            reduce_size = a_shape[reduce_dim]
-            padded_size = 1
-            while padded_size < reduce_size:
-                padded_size *= 2
-
             # reduce
-            for s in range(padded_size):
-                if s < reduce_size:
-                    out_index[reduce_dim] = s
-                    j = index_to_position(out_index, a_strides)
-                    acc = fn(acc, a_storage[j])
-                else: # padding case
-                    acc = fn(acc, reduce_value)
+            reduce_size = a_shape[reduce_dim]
+            for s in range(reduce_size):
+                out_index[reduce_dim] = s
+                j = index_to_position(out_index, a_strides)
+                acc = fn(acc, a_storage[j])
 
             # write output to global memory
             cache[pos] = acc
@@ -358,7 +350,7 @@ def tensor_reduce(
             cache[pos] = reduce_value
         cuda.syncthreads()
 
-        # reduce
+        # reduce across cache/block
         j = 1
         while j < BLOCK_DIM:
             stride = j * 2
@@ -369,7 +361,9 @@ def tensor_reduce(
 
         # write output to global memory
         if pos == 0:
-            out[out_pos] = cache[0]
+            to_index(out_pos, out_shape, out_index)
+            o = index_to_position(out_index, out_strides)
+            out[o] = cache[0]
 
     return jit(_reduce)  # type: ignore
 
