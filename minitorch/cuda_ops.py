@@ -331,10 +331,8 @@ def tensor_reduce(
         pos = cuda.threadIdx.x
 
         # TODO: Implement for Task 3.3.
-        i = cuda.blockIdx.x * cuda.blockDim.x + cuda.threadIdx.x
-
-        if i < out_size:
-            to_index(i, out_shape, out_index)
+        if out_pos < out_size:
+            to_index(out_pos, out_shape, out_index)
             acc = reduce_value
 
             # reduce
@@ -344,9 +342,27 @@ def tensor_reduce(
                 j = index_to_position(out_index, a_strides)
                 acc = fn(acc, a_storage[j])
 
-            # write output to global memory
+            # write output to shared memory
             cache[pos] = acc
         else:
+            cache[pos] = reduce_value
+        cuda.syncthreads()
+
+        if out_pos < out_size:
+            # Convert linear index to multidimensional index for output tensor
+            to_index(out_pos, out_shape, out_index)
+            accumulated_value = reduce_value  # Initialize accumulator
+
+            # Iterate over the dimension being reduced
+            for idx in range(a_shape[reduce_dim]):
+                out_index[reduce_dim] = idx
+                input_pos = index_to_position(out_index, a_strides)
+                accumulated_value = fn(accumulated_value, a_storage[input_pos])
+
+            # Store accumulated result in shared memory
+            cache[pos] = accumulated_value
+        else:
+            # Set unused threads' shared memory to reduce_value
             cache[pos] = reduce_value
         cuda.syncthreads()
 
