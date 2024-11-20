@@ -270,23 +270,13 @@ def _sum_practice(out: Storage, a: Storage, size: int) -> None:
     cuda.syncthreads()
 
     # reduce
-    # stride = BLOCK_DIM // 2
-    # while stride > 0:
-    #     if pos < stride and i + stride < size:
-    #         cache[pos] = cache[pos] + cache[pos + stride]
-    #     stride //= 2
-    #     cuda.syncthreads() 
-    active = BLOCK_DIM
-    while active > 0:
-        if pos < active // 2 and i + active // 2 < size:
-            even_idx = pos * 2
-            odd_idx = pos * 2 + 1
-            if odd_idx < active:
-                cache[pos] = cache[even_idx] + cache[odd_idx]
-            else:
-                cache[pos] = cache[even_idx]
+    j = 1
+    while j < BLOCK_DIM:
+        stride = j * 2
+        if pos % stride == 0 and (pos + j) < BLOCK_DIM:
+            cache[pos] += cache[pos + j]
         cuda.syncthreads()
-        active //= 2
+        j = stride
 
     # write output to global memory
     if pos == 0:
@@ -364,19 +354,22 @@ def tensor_reduce(
 
             # write output to global memory
             cache[pos] = acc
+        else:
+            cache[pos] = reduce_value
+        cuda.syncthreads()
+
+        # reduce
+        j = 1
+        while j < BLOCK_DIM:
+            stride = j * 2
+            if pos % stride == 0 and (pos + j) < BLOCK_DIM:
+                cache[pos] += cache[pos + j]
             cuda.syncthreads()
+            j = stride 
 
-            # reduce
-            stride = BLOCK_DIM // 2
-            while stride > 0:
-                if pos < stride and pos + stride < BLOCK_DIM:
-                    cache[pos] = cache[pos] + cache[pos + stride]
-                stride //= 2
-                cuda.syncthreads() 
-
-            # write output to global memory
-            if pos == 0:
-                out[out_pos] = cache[0]
+        # write output to global memory
+        if pos == 0:
+            out[out_pos] = cache[0]
 
     return jit(_reduce)  # type: ignore
 
