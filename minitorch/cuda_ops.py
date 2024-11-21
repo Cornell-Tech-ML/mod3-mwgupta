@@ -338,8 +338,8 @@ def tensor_reduce(
             reduce_size = a_shape[reduce_dim]
             if pos < reduce_size:
                 out_index[reduce_dim] = pos
-                curr_pos = index_to_position(out_index, a_strides)
-                cache[pos] = a_storage[curr_pos]
+                a_pos = index_to_position(out_index, a_strides)
+                cache[pos] = a_storage[a_pos]
             else:
                 cache[pos] = reduce_value
             cuda.syncthreads()
@@ -497,7 +497,7 @@ def _tensor_matrix_multiply(
     acc = 0.0
 
     for tile in range(0, a_shape[-1], BLOCK_DIM):
-        # load to shared
+        # Load into shared memory
         if i < a_shape[-2] and (tile + pj) < a_shape[-1]:
             a_index = batch * a_batch_stride + i * a_strides[1] + (tile + pj) * a_strides[2]
             a_shared[pi, pj] = a_storage[a_index]
@@ -512,13 +512,14 @@ def _tensor_matrix_multiply(
 
         cuda.syncthreads()
 
-        # dot product
+        # Compute the dot product
         if i < out_shape[-2] and j < out_shape[-1]:
-            for k in range(BLOCK_DIM):
+            for k in range(min(BLOCK_DIM, a_shape[-1] - tile)):  # Handle last tile
                 acc += a_shared[pi, k] * b_shared[k, pj]
-            cuda.syncthreads()
 
-    # write to global
+        cuda.syncthreads()
+
+    # Write to global memory
     if i < out_shape[-2] and j < out_shape[-1]:
         out_index = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
         out[out_index] = acc
