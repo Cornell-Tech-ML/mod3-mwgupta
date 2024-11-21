@@ -331,36 +331,68 @@ def tensor_reduce(
         pos = cuda.threadIdx.x
 
         # TODO: Implement for Task 3.3.
+        # if out_pos < out_size:
+        #     to_index(out_pos, out_shape, out_index)
+        #     acc = reduce_value
+
+        #     # reduce
+        #     reduce_size = a_shape[reduce_dim]
+        #     for s in range(reduce_size):
+        #         out_index[reduce_dim] = s
+        #         j = index_to_position(out_index, a_strides)
+        #         acc = fn(acc, a_storage[j])
+
+        #     # write output to global memory
+        #     cache[pos] = acc
+        # else:
+        #     cache[pos] = reduce_value
+        # cuda.syncthreads()
+
+        # # reduce across cache/block
+        # j = 1
+        # while j < BLOCK_DIM:
+        #     stride = j * 2
+        #     if pos % stride == 0 and (pos + j) < BLOCK_DIM:
+        #         cache[pos] += cache[pos + j]
+        #     cuda.syncthreads()
+        #     j = stride 
+
+        # # write output to global memory
+        # if pos == 0:
+        #     o = index_to_position(out_index, out_strides)
+        #     out[o] = cache[0]
+
+        reduce_size = a_shape[reduce_dim]
+
         if out_pos < out_size:
+            # Convert output position to index and then to storage position
             to_index(out_pos, out_shape, out_index)
-            acc = reduce_value
-
-            # reduce
-            reduce_size = a_shape[reduce_dim]
-            for s in range(reduce_size):
-                out_index[reduce_dim] = s
-                j = index_to_position(out_index, a_strides)
-                acc = fn(acc, a_storage[j])
-
-            # write output to global memory
-            cache[pos] = acc
-        else:
-            cache[pos] = reduce_value
-        cuda.syncthreads()
-
-        # reduce across cache/block
-        j = 1
-        while j < BLOCK_DIM:
-            stride = j * 2
-            if pos % stride == 0 and (pos + j) < BLOCK_DIM:
-                cache[pos] += cache[pos + j]
-            cuda.syncthreads()
-            j = stride 
-
-        # write output to global memory
-        if pos == 0:
             o = index_to_position(out_index, out_strides)
-            out[o] = cache[0]
+
+            # Load data into shared memory
+            for i in range(pos, reduce_size, BLOCK_DIM):
+                out_index[reduce_dim] = i
+                curr_pos = index_to_position(out_index, a_strides)
+                if i < reduce_size:  # Boundary check
+                    cache[pos] = a_storage[curr_pos]
+                else:  # Pad with reduce_value for odd numbers
+                    cache[pos] = reduce_value
+
+            # Synchronize to ensure all data is loaded
+            cuda.syncthreads()
+
+            # Tree-like reduction in shared memory
+            # Each iteration reduces the active threads by half
+            s = BLOCK_DIM // 2
+            while s > 0:
+                if pos < s and pos + s < reduce_size:
+                    cache[pos] = fn(cache[pos], cache[pos + s])
+                cuda.syncthreads()
+                s //= 2
+
+            # Write result using only thread 0
+            if pos == 0:
+                out[o] = cache[0]
 
     return jit(_reduce)  # type: ignore
 
