@@ -336,10 +336,12 @@ def tensor_reduce(
 
             # read into shared memory
             reduce_size = a_shape[reduce_dim]
-            for i in range(pos, reduce_size, BLOCK_DIM):
-                out_index[reduce_dim] = i
+            if pos < reduce_size:
+                out_index[reduce_dim] = pos
                 curr_pos = index_to_position(out_index, a_strides)
                 cache[pos] = a_storage[curr_pos]
+            else:
+                cache[pos] = reduce_value
             cuda.syncthreads()
 
             # reduce across cache aka block
