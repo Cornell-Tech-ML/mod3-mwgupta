@@ -1,13 +1,12 @@
 import minitorch
 import time
 import numpy as np
+from minitorch.tensor_ops import TensorBackend
 
 FastTensorBackend = minitorch.TensorBackend(minitorch.FastOps)
 GPUBackend = minitorch.TensorBackend(minitorch.CudaOps)
 
-from minitorch.tensor_ops import TensorBackend
-
-def run_matmul(backend: TensorBackend, size: int = 16) -> None:
+def run_matmul(backend: TensorBackend, size: int = 16) -> minitorch.Tensor:
     """Run a matrix multiplication."""
     batch_size = 2
 
@@ -15,7 +14,6 @@ def run_matmul(backend: TensorBackend, size: int = 16) -> None:
     y = minitorch.rand((batch_size, size, size), backend=backend)
     z = x @ y
     return z
-
 
 if __name__ == "__main__":
     # Warmup
