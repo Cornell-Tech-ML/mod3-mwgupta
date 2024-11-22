@@ -496,14 +496,16 @@ def _tensor_matrix_multiply(
     # TODO: Implement for Task 3.4.
     acc = 0.0
 
+    # 1) Move across shared dimension by block dim.
     for tile in range(0, a_shape[-1], BLOCK_DIM):
-        # Load into shared memory
+        # a) Copy into shared memory for a matrix.
         if i < a_shape[-2] and (tile + pj) < a_shape[-1]:
             a_index = batch * a_batch_stride + i * a_strides[1] + (tile + pj) * a_strides[2]
             a_shared[pi, pj] = a_storage[a_index]
         else:
             a_shared[pi, pj] = 0.0
 
+        # b) Copy into shared memory for b matrix
         if j < b_shape[-1] and (tile + pi) < b_shape[-2]:
             b_index = batch * b_batch_stride + (tile + pi) * b_strides[1] + j * b_strides[2]
             b_shared[pi, pj] = b_storage[b_index]
@@ -512,14 +514,14 @@ def _tensor_matrix_multiply(
 
         cuda.syncthreads()
 
-        # Compute the dot product
+        # c) Compute the dot produce for position c[i, j]
         if i < out_shape[-2] and j < out_shape[-1]:
             for k in range(min(BLOCK_DIM, a_shape[-1] - tile)):  # Handle last tile
                 acc += a_shared[pi, k] * b_shared[k, pj]
 
         cuda.syncthreads()
 
-    # Write to global memory
+    # write to global
     if i < out_shape[-2] and j < out_shape[-1]:
         out_index = batch * out_strides[0] + i * out_strides[1] + j * out_strides[2]
         out[out_index] = acc
