@@ -5,8 +5,9 @@ import numpy as np
 FastTensorBackend = minitorch.TensorBackend(minitorch.FastOps)
 GPUBackend = minitorch.TensorBackend(minitorch.CudaOps)
 
+from minitorch.tensor_ops import TensorBackend
 
-def run_matmul(backend: str, size: int = 16) -> None:
+def run_matmul(backend: TensorBackend, size: int = 16) -> None:
     """Run a matrix multiplication."""
     batch_size = 2
 
